@@ -97,8 +97,17 @@ def api_list_locations(request):
         ]
     }
     """
-    return JsonResponse({})
+    response = []
+    locations = Location.objects.all()
+    for location in locations:
+        response.append(
+            {
+                "city": location.name,
+                "href": location.get_api_url(),
 
+            }
+        )
+    return JsonResponse({"locations": response})
 
 def api_show_location(request, id):
     """
@@ -117,4 +126,13 @@ def api_show_location(request, id):
         "state": the two-letter abbreviation for the state,
     }
     """
-    return JsonResponse({})
+    locations = Location.objects.get(id=id)
+    return JsonResponse({
+        "name": locations.name,
+        "city": locations.city,
+        "room_count": locations.room_count,
+        "created": locations.created,
+        "updated": locations.updated,
+        "state": locations.state.abbreviation,
+    }
+    )
