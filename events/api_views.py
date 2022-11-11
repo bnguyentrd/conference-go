@@ -3,6 +3,7 @@ from common.json import ModelEncoder
 from .models import Conference, Location, State
 from django.views.decorators.http import require_http_methods
 import json
+from .acls import get_photo, get_weather_data
 
 
 @require_http_methods(["GET", "POST"])
@@ -74,6 +75,7 @@ class ConferenceDetailEncoder(ModelEncoder):
         "created",
         "updated",
         "location",
+        # "temp",
     ]
     encoders = {
         "location": LocationListEncoder(),
@@ -82,34 +84,15 @@ class ConferenceDetailEncoder(ModelEncoder):
 
 @require_http_methods(["DELETE", "GET", "PUT"])
 def api_show_conference(request, id):
-    """
-    Returns the details for the Conference model specified
-    by the id parameter.
-
-    This should return a dictionary with the name, starts,
-    ends, description, created, updated, max_presentations,
-    max_attendees, and a dictionary for the location containing
-    its name and href.
-
-    {
-        "name": the conference's name,
-        "starts": the date/time when the conference starts,
-        "ends": the date/time when the conference ends,
-        "description": the description of the conference,
-        "created": the date/time when the record was created,
-        "updated": the date/time when the record was updated,
-        "max_presentations": the maximum number of presentations,
-        "max_attendees": the maximum number of attendees,
-        "location": {
-            "name": the name of the location,
-            "href": the URL for the location,
-        }
-    }
-    """
     if request.method == "GET":
         conference = Conference.objects.get(id=id)
+
+        city = conference.location.city
+        state = conference.location.state.abbreviation
+        weather = get_weather_data(city, state)
+
         return JsonResponse(
-            conference,
+            {"weather": weather, "conference": conference},
             encoder=ConferenceDetailEncoder,
             safe=False
         )
@@ -118,8 +101,6 @@ def api_show_conference(request, id):
         return JsonResponse({"deleted": count > 0})
     else:
         content = json.loads(request.body)
-
-        # Get the Location object and put it in the content dict
         try:
             if "conference" in content:
                 conference = Conference.objects.get(["conference"])
@@ -141,24 +122,6 @@ def api_show_conference(request, id):
 
 @require_http_methods(["GET", "POST"])
 def api_list_locations(request):
-    """
-    Lists the location names and the link to the location.
-
-    Returns a dictionary with a single key "locations" which
-    is a list of location names and URLS. Each entry in the list
-    is a dictionary that contains the name of the location and
-    the link to the location's information.
-
-    {
-        "locations": [
-            {
-                "name": location's name,
-                "href": URL to the location,
-            },
-            ...
-        ]
-    }
-    """
     if request.method == "GET":
         locations = Location.objects.all()
         return JsonResponse(
@@ -167,9 +130,22 @@ def api_list_locations(request):
         )
     else:
         content = json.loads(request.body)
+        # # print("Content", content)
+        # state = State.objects.get(abbreviation=content["state"])
+        # content["state"] = state
+        # photo = get_photo(content["city"], content["state"].abbreviation)
+        # content.update(photo)
+        # location = Location.objects.create(**content)
+        # return JsonResponse(
+        #     location,
+        #     encoder=LocationDetailEncoder,
+        #     safe=False,
+        # )
     try:
         state = State.objects.get(abbreviation=content["state"])
         content["state"] = state
+        photo = get_photo(content["city"], content["state"].abbreviation)
+        content.update(photo)
     except State.DoesNotExist:
         return JsonResponse(
             {"message": "Invalid state abbreviation"},
@@ -241,6 +217,7 @@ class LocationDetailEncoder(ModelEncoder):
         "room_count",
         "created",
         "updated",
+        "picture_url",
     ]
 
     def get_extra_data(self, o):
